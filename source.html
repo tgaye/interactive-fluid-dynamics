@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Fluid Dynamics</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            color: #e0e0e0;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(30, 30, 40, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            max-width: 300px;
+            transition: all 0.3s ease;
+        }
+        .control-group {
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
+        .control-group:last-child {
+            border-bottom: none;
+        }
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #7f9fff;
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        button {
+            background: #3a3a4a;
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            margin: 5px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #4a4a5a;
+        }
+        .value-display {
+            font-size: 11px;
+            color: #aaa;
+            text-align: right;
+        }
+        #toggle-ui {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(30, 30, 40, 0.8);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 101;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        select {
+            width: 100%;
+            background: #2a2a3a;
+            border: 1px solid #3a3a4a;
+            color: white;
+            padding: 5px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+    </style>
+
+<base target="_self">
+
+
+    <div id="canvas-container"></div>
+    <button id="toggle-ui">☰</button>
+    <div id="ui-panel">
+        <div class="control-group">
+            <h3>Fluid Properties</h3>
+            <label for="viscosity">Viscosity</label>
+            <input type="range" id="viscosity" min="0.001" max="0.1" step="0.001" value="0.01">
+            <div class="value-display" id="viscosity-value">0.01</div>
+            
+            <label for="density">Density</label>
+            <input type="range" id="density" min="0.1" max="2" step="0.1" value="1.0">
+            <div class="value-display" id="density-value">1.0</div>
+            
+            <label for="velocity">Flow Velocity</label>
+            <input type="range" id="velocity" min="0.1" max="5" step="0.1" value="1.0">
+            <div class="value-display" id="velocity-value">1.0</div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Visualization</h3>
+            <label for="viz-mode">Mode</label>
+            <select id="viz-mode">
+                <option value="particles">Particle Tracers</option>
+                <option value="velocity">Velocity Field</option>
+                <option value="pressure">Pressure Field</option>
+                <option value="streamlines">Streamlines</option>
+            </select>
+            
+            <label for="particle-count">Particle Count</label>
+            <input type="range" id="particle-count" min="100" max="2000" step="50" value="800">
+            <div class="value-display" id="particle-count-value">800</div>
+            
+            <label for="color-scheme">Color Scheme</label>
+            <select id="color-scheme">
+                <option value="thermal">Thermal</option>
+                <option value="ocean">Ocean</option>
+                <option value="plasma">Plasma</option>
+                <option value="rainbow">Rainbow</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <h3>Boundary Conditions</h3>
+            <label for="boundary-type">Type</label>
+            <select id="boundary-type">
+                <option value="none">None</option>
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+                <option value="airfoil">Airfoil</option>
+            </select>
+            
+            <label for="boundary-size">Size</label>
+            <input type="range" id="boundary-size" min="20" max="150" step="5" value="80">
+            <div class="value-display" id="boundary-size-value">80</div>
+            
+            <label for="boundary-x">X Position</label>
+            <input type="range" id="boundary-x" min="0" max="100" step="1" value="50">
+            <div class="value-display" id="boundary-x-value">50%</div>
+            
+            <label for="boundary-y">Y Position</label>
+            <input type="range" id="boundary-y" min="0" max="100" step="1" value="50">
+            <div class="value-display" id="boundary-y-value">50%</div>
+        </div>
+        
+        <div class="control-group">
+            <button id="reset-btn">Reset</button>
+            <button id="randomize-btn">Randomize</button>
+        </div>
+    </div>
+
+    <script>
+        const fluidSim = (p) => {
+            // Simulation parameters
+            let viscosity = 0.01;
+            let density = 1.0;
+            let flowVelocity = 1.0;
+            let particleCount = 800;
+            let boundarySize = 80;
+            let boundaryX = 0.5;
+            let boundaryY = 0.5;
+            let boundaryType = 'circle';
+            let vizMode = 'particles';
+            let colorScheme = 'thermal';
+            
+            // Simulation state
+            let particles = [];
+            let gridSize = 40;
+            let velocityField = [];
+            let pressureField = [];
+            let cols, rows;
+            let canvasWidth, canvasHeight;
+            let showUI = true;
+            
+            // Color palettes
+            const colorPalettes = {
+                thermal: [
+                    p.color(0, 0, 0),
+                    p.color(128, 0, 0),
+                    p.color(255, 100, 0),
+                    p.color(255, 255, 0),
+                    p.color(255, 255, 255)
+                ],
+                ocean: [
+                    p.color(0, 0, 50),
+                    p.color(0, 50, 100),
+                    p.color(0, 150, 150),
+                    p.color(100, 200, 200),
+                    p.color(200, 250, 255)
+                ],
+                plasma: [
+                    p.color(13, 8, 135),
+                    p.color(126, 3, 168),
+                    p.color(204, 71, 120),
+                    p.color(248, 149, 64),
+                    p.color(239, 248, 33)
+                ],
+                rainbow: [
+                    p.color(255, 0, 0),
+                    p.color(255, 127, 0),
+                    p.color(255, 255, 0),
+                    p.color(0, 255, 0),
+                    p.color(0, 0, 255),
+                    p.color(75, 0, 130),
+                    p.color(148, 0, 211)
+                ]
+            };
+            
+            p.setup = () => {
+                canvasWidth = Math.min(p.windowWidth - 40, 1200);
+                canvasHeight = Math.min(p.windowHeight - 40, 800);
+                let canvas = p.createCanvas(canvasWidth, canvasHeight, p.WEBGL);
+                canvas.parent('canvas-container');
+                
+                // Initialize UI controls
+                setupUIControls();
+                
+                // Initialize simulation grid
+                cols = Math.floor(canvasWidth / gridSize);
+                rows = Math.floor(canvasHeight / gridSize);
+                
+                // Initialize velocity and pressure fields
+                for (let i = 0; i < cols; i++) {
+                    velocityField[i] = [];
+                    pressureField[i] = [];
+                    for (let j = 0; j < rows; j++) {
+                        velocityField[i][j] = p.createVector(flowVelocity, 0);
+                        pressureField[i][j] = 0;
+                    }
+                }
+                
+                // Create particles
+                createParticles();
+                
+                // Set up event listeners
+                document.getElementById('toggle-ui').addEventListener('click', toggleUI);
+            };
+            
+            p.draw = () => {
+                p.background(20);
+                p.translate(-p.width/2, -p.height/2); // Adjust for WEBGL center origin
+                
+                // Update simulation
+                updateVelocityField();
+                updateParticles();
+                
+                // Draw visualization based on selected mode
+                switch(vizMode) {
+                    case 'particles':
+                        drawParticles();
+                        break;
+                    case 'velocity':
+                        drawVelocityField();
+                        break;
+                    case 'pressure':
+                        drawPressureField();
+                        break;
+                    case 'streamlines':
+                        drawStreamlines();
+                        break;
+                }
+                
+                // Draw boundary
+                drawBoundary();
+                
+                // Handle mouse interaction
+                handleMouseInteraction();
+            };
+            
+            function setupUIControls() {
+                // Fluid properties
+                document.getElementById('viscosity').addEventListener('input', (e) => {
+                    viscosity = parseFloat(e.target.value);
+                    document.getElementById('viscosity-value').textContent = viscosity.toFixed(3);
+                });
+                
+                document.getElementById('density').addEventListener('input', (e) => {
+                    density = parseFloat(e.target.value);
+                    document.getElementById('density-value').textContent = density.toFixed(1);
+                });
+                
+                document.getElementById('velocity').addEventListener('input', (e) => {
+                    flowVelocity = parseFloat(e.target.value);
+                    document.getElementById('velocity-value').textContent = flowVelocity.toFixed(1);
+                    resetVelocityField();
+                });
+                
+                // Visualization
+                document.getElementById('viz-mode').addEventListener('change', (e) => {
+                    vizMode = e.target.value;
+                });
+                
+                document.getElementById('particle-count').addEventListener('input', (e) => {
+                    particleCount = parseInt(e.target.value);
+                    document.getElementById('particle-count-value').textContent = particleCount;
+                    createParticles();
+                });
+                
+                document.getElementById('color-scheme').addEventListener('change', (e) => {
+                    colorScheme = e.target.value;
+                });
+                
+                // Boundary conditions
+                document.getElementById('boundary-type').addEventListener('change', (e) => {
+                    boundaryType = e.target.value;
+                });
+                
+                document.getElementById('boundary-size').addEventListener('input', (e) => {
+                    boundarySize = parseInt(e.target.value);
+                    document.getElementById('boundary-size-value').textContent = boundarySize;
+                });
+                
+                document.getElementById('boundary-x').addEventListener('input', (e) => {
+                    boundaryX = parseInt(e.target.value) / 100;
+                    document.getElementById('boundary-x-value').textContent = `${Math.round(boundaryX * 100)}%`;
+                });
+                
+                document.getElementById('boundary-y').addEventListener('input', (e) => {
+                    boundaryY = parseInt(e.target.value) / 100;
+                    document.getElementById('boundary-y-value').textContent = `${Math.round(boundaryY * 100)}%`;
+                });
+                
+                // Buttons
+                document.getElementById('reset-btn').addEventListener('click', resetSimulation);
+                document.getElementById('randomize-btn').addEventListener('click', randomizeParameters);
+            }
+            
+            function toggleUI() {
+                showUI = !showUI;
+                document.getElementById('ui-panel').style.display = showUI ? 'block' : 'none';
+            }
+            
+            function createParticles() {
+                particles = [];
+                for (let i = 0; i < particleCount; i++) {
+                    particles.push({
+                        pos: p.createVector(
+                            p.random(0, p.width),
+                            p.random(0, p.height)
+                        ),
+                        vel: p.createVector(0, 0),
+                        life: p.random(100, 200),
+                        maxLife: p.random(150, 250),
+                        size: p.random(1, 3)
+                    });
+                }
+            }
+            
+            function resetVelocityField() {
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        velocityField[i][j] = p.createVector(flowVelocity, 0);
+                        pressureField[i][j] = 0;
+                    }
+                }
+            }
+            
+            function updateVelocityField() {
+                // Simplified Navier-Stokes simulation
+                let newVelocityField = [];
+                let newPressureField = [];
+                
+                // Initialize new fields
+                for (let i = 0; i < cols; i++) {
+                    newVelocityField[i] = [];
+                    newPressureField[i] = [];
+                    for (let j = 0; j < rows; j++) {
+                        newVelocityField[i][j] = p.createVector(0, 0);
+                        newPressureField[i][j] = 0;
+                    }
+                }
+                
+                // Update velocities (simplified)
+                for (let i = 1; i < cols - 1; i++) {
+                    for (let j = 1; j < rows - 1; j++) {
+                        // Advection
+                        let x = i - velocityField[i][j].x * 0.5;
+                        let y = j - velocityField[i][j].y * 0.5;
+                        
+                        x = p.constrain(x, 0, cols - 1);
+                        y = p.constrain(y, 0, rows - 1);
+                        
+                        let i0 = p.floor(x);
+                        let j0 = p.floor(y);
+                        let i1 = i0 + 1;
+                        let j1 = j0 + 1;
+                        
+                        i1 = p.min(i1, cols - 1);
+                        j1 = p.min(j1, rows - 1);
+                        
+                        let s = x - i0;
+                        let t = y - j0;
+                        
+                        let a = p.lerp(velocityField[i0][j0].x, velocityField[i1][j0].x, s);
+                        let b = p.lerp(velocityField[i0][j1].x, velocityField[i1][j1].x, s);
+                        let u = p.lerp(a, b, t);
+                        
+                        a = p.lerp(velocityField[i0][j0].y, velocityField[i1][j0].y, s);
+                        b = p.lerp(velocityField[i0][j1].y, velocityField[i1][j1].y, s);
+                        let v = p.lerp(a, b, t);
+                        
+                        newVelocityField[i][j].set(u, v);
+                        
+                        // Diffusion (simplified viscosity)
+                        let avgVel = p.createVector(0, 0);
+                        let count = 0;
+                        
+                        for (let di = -1; di <= 1; di++) {
+                            for (let dj = -1; dj <= 1; dj++) {
+                                let ni = i + di;
+                                let nj = j + dj;
+                                
+                                if (ni >= 0 && ni < cols && nj >= 0 && nj < rows) {
+                                    avgVel.add(velocityField[ni][nj]);
+                                    count++;
+                                }
+                            }
+                        }
+                        
+                        avgVel.div(count);
+                        newVelocityField[i][j].lerp(avgVel, viscosity * 10);
+                        
+                        // Pressure (simplified)
+                        let divergence = (velocityField[i+1][j].x - velocityField[i-1][j].x) / 2 +
+                                        (velocityField[i][j+1].y - velocityField[i][j-1].y) / 2;
+                        
+                        newPressureField[i][j] = divergence * -0.1;
+                        
+                        // Apply pressure gradient
+                        let pressureX = (newPressureField[i+1][j] - newPressureField[i-1][j]) / 2;
+                        let pressureY = (newPressureField[i][j+1] - newPressureField[i][j-1]) / 2;
+                        
+                        newVelocityField[i][j].x -= pressureX / density;
+                        newVelocityField[i][j].y -= pressureY / density;
+                    }
+                }
+                
+                // Boundary conditions
+                for (let i = 0; i < cols; i++) {
+                    if (i < rows) {
+                        // Left boundary (inflow)
+                        newVelocityField[0][i].set(flowVelocity, 0);
+                        
+                        // Right boundary (outflow)
+                        if (cols > 1) {
+                            newVelocityField[cols-1][i].set(flowVelocity, 0);
+                        }
+                    }
+                    
+                    // Top and bottom boundaries
+                    newVelocityField[i][0].set(0, 0);
+                    if (rows > 1) {
+                        newVelocityField[i][Math.min(rows-1, newVelocityField[i].length-1)].set(0, 0);
+                    }
+                }
+                
+                // Update fields
+                velocityField = newVelocityField;
+                pressureField = newPressureField;
+            }
+            
+            function updateParticles() {
+                for (let particle of particles) {
+                    // Get grid cell
+                    let i = p.floor(particle.pos.x / gridSize);
+                    let j = p.floor(particle.pos.y / gridSize);
+                    
+                    i = p.constrain(i, 0, cols - 1);
+                    j = p.constrain(j, 0, rows - 1);
+                    
+                    // Update velocity based on field
+                    particle.vel.lerp(velocityField[i][j], 0.1);
+                    
+                    // Update position
+                    particle.pos.add(particle.vel);
+                    
+                    // Boundary wrapping
+                    if (particle.pos.x < 0) particle.pos.x = p.width;
+                    if (particle.pos.x > p.width) particle.pos.x = 0;
+                    if (particle.pos.y < 0) particle.pos.y = p.height;
+                    if (particle.pos.y > p.height) particle.pos.y = 0;
+                    
+                    // Life cycle
+                    particle.life--;
+                    if (particle.life <= 0) {
+                        particle.pos.set(p.random(-100, 0), p.random(0, p.height));
+                        particle.vel.set(0, 0);
+                        particle.life = particle.maxLife;
+                    }
+                    
+                    // Check boundary collision
+                    if (isInsideBoundary(particle.pos)) {
+                        // Simple bounce
+                        particle.vel.mult(-0.5);
+                        particle.pos.add(particle.vel);
+                    }
+                }
+            }
+            
+            function isInsideBoundary(pos) {
+                if (boundaryType === 'none') return false;
+                
+                let boundaryPos = p.createVector(
+                    p.width * boundaryX,
+                    p.height * boundaryY
+                );
+                
+                let distToCenter = p.dist(pos.x, pos.y, boundaryPos.x, boundaryPos.y);
+                
+                if (boundaryType === 'circle') {
+                    return distToCenter < boundarySize;
+                } else if (boundaryType === 'square') {
+                    return (
+                        pos.x > boundaryPos.x - boundarySize &&
+                        pos.x < boundaryPos.x + boundarySize &&
+                        pos.y > boundaryPos.y - boundarySize &&
+                        pos.y < boundaryPos.y + boundarySize
+                    );
+                } else if (boundaryType === 'airfoil') {
+                    // Simplified airfoil shape check
+                    let angle = p.atan2(pos.y - boundaryPos.y, pos.x - boundaryPos.x);
+                    let radius = boundarySize * (0.5 + 0.5 * p.sin(angle * 2 + p.PI/2));
+                    return distToCenter < radius;
+                }
+                
+                return false;
+            }
+            
+            function drawParticles() {
+                p.noStroke();
+                
+                for (let particle of particles) {
+                    // Get velocity magnitude for color mapping
+                    let speed = particle.vel.mag();
+                    let speedNorm = p.map(speed, 0, 3, 0, 1);
+                    
+                    // Get color from palette
+                    let palette = colorPalettes[colorScheme];
+                    let colorIndex = p.floor(speedNorm * (palette.length - 1));
+                    colorIndex = p.constrain(colorIndex, 0, palette.length - 2);
+                    
+                    let amt = speedNorm * (palette.length - 1) - colorIndex;
+                    let col = p.lerpColor(palette[colorIndex], palette[colorIndex + 1], amt);
+                    
+                    // Set color with alpha based on life
+                    let alpha = p.map(particle.life, 0, particle.maxLife, 50, 200);
+                    col.setAlpha(alpha);
+                    p.fill(col);
+                    
+                    // Draw particle
+                    p.circle(particle.pos.x, particle.pos.y, particle.size);
+                }
+            }
+            
+            function drawVelocityField() {
+                p.strokeWeight(1);
+                
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let x = i * gridSize + gridSize/2;
+                        let y = j * gridSize + gridSize/2;
+                        let vel = velocityField[i][j];
+                        let speed = vel.mag();
+                        
+                        // Map speed to color
+                        let speedNorm = p.map(speed, 0, 3, 0, 1);
+                        let palette = colorPalettes[colorScheme];
+                        let colorIndex = p.floor(speedNorm * (palette.length - 1));
+                        colorIndex = p.constrain(colorIndex, 0, palette.length - 2);
+                        
+                        let amt = speedNorm * (palette.length - 1) - colorIndex;
+                        let col = p.lerpColor(palette[colorIndex], palette[colorIndex + 1], amt);
+                        
+                        p.stroke(col);
+                        
+                        // Draw arrow
+                        let angle = vel.heading();
+                        let len = speed * gridSize * 0.8;
+                        
+                        p.push();
+                        p.translate(x, y);
+                        p.rotate(angle);
+                        
+                        // Line
+                        p.line(0, 0, len, 0);
+                        
+                        // Arrowhead
+                        p.line(len, 0, len - 5, -3);
+                        p.line(len, 0, len - 5, 3);
+                        
+                        p.pop();
+                    }
+                }
+            }
+            
+            function drawPressureField() {
+                p.noStroke();
+                
+                // Find min/max pressure for normalization
+                let minP = Infinity, maxP = -Infinity;
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        minP = p.min(minP, pressureField[i][j]);
+                        maxP = p.max(maxP, pressureField[i][j]);
+                    }
+                }
+                
+                // Draw pressure field
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let x = i * gridSize;
+                        let y = j * gridSize;
+                        
+                        // Normalize pressure
+                        let pNorm = p.map(pressureField[i][j], minP, maxP, 0, 1);
+                        pNorm = p.constrain(pNorm, 0, 1);
+                        
+                        // Get color from palette
+                        let palette = colorPalettes[colorScheme];
+                        let colorIndex = p.floor(pNorm * (palette.length - 1));
+                        colorIndex = p.constrain(colorIndex, 0, palette.length - 2);
+                        
+                        let amt = pNorm * (palette.length - 1) - colorIndex;
+                        let col = p.lerpColor(palette[colorIndex], palette[colorIndex + 1], amt);
+                        
+                        p.fill(col);
+                        p.rect(x, y, gridSize, gridSize);
+                    }
+                }
+            }
+            
+            function drawStreamlines() {
+                p.strokeWeight(1);
+                
+                // Draw multiple streamlines
+                for (let n = 0; n < 50; n++) {
+                    // Random starting point
+                    let x = p.random(0, p.width);
+                    let y = p.random(0, p.height);
+                    
+                    // Skip if inside boundary
+                    if (isInsideBoundary(p.createVector(x, y))) continue;
+                    
+                    p.beginShape();
+                    
+                    // Trace streamline
+                    for (let step = 0; step < 100; step++) {
+                        // Get grid cell
+                        let i = p.floor(x / gridSize);
+                        let j = p.floor(y / gridSize);
+                        
+                        i = p.constrain(i, 0, cols - 1);
+                        j = p.constrain(j, 0, rows - 1);
+                        
+                        // Get velocity
+                        let vel = velocityField[i][j];
+                        let speed = vel.mag();
+                        
+                        // Map speed to color
+                        let speedNorm = p.map(speed, 0, 3, 0, 1);
+                        let palette = colorPalettes[colorScheme];
+                        let colorIndex = p.floor(speedNorm * (palette.length - 1));
+                        colorIndex = p.constrain(colorIndex, 0, palette.length - 2);
+                        
+                        let amt = speedNorm * (palette.length - 1) - colorIndex;
+                        let col = p.lerpColor(palette[colorIndex], palette[colorIndex + 1], amt);
+                        
+                        p.stroke(col);
+                        p.vertex(x, y);
+                        
+                        // Move along velocity field
+                        x += vel.x * 2;
+                        y += vel.y * 2;
+                        
+                        // Stop if out of bounds or inside boundary
+                        if (x < 0 || x > p.width || y < 0 || y > p.height || 
+                            isInsideBoundary(p.createVector(x, y))) {
+                            break;
+                        }
+                    }
+                    
+                    p.endShape();
+                }
+            }
+            
+            function drawBoundary() {
+                if (boundaryType === 'none') return;
+                
+                let x = p.width * boundaryX;
+                let y = p.height * boundaryY;
+                
+                p.noFill();
+                p.stroke(255, 100);
+                p.strokeWeight(2);
+                
+                if (boundaryType === 'circle') {
+                    p.circle(x, y, boundarySize * 2);
+                } else if (boundaryType === 'square') {
+                    p.rectMode(p.CENTER);
+                    p.rect(x, y, boundarySize * 2, boundarySize * 2);
+                    p.rectMode(p.CORNER);
+                } else if (boundaryType === 'airfoil') {
+                    p.beginShape();
+                    for (let angle = 0; angle < p.TWO_PI; angle += 0.1) {
+                        let radius = boundarySize * (0.5 + 0.5 * p.sin(angle * 2 + p.PI/2));
+                        let px = x + radius * p.cos(angle);
+                        let py = y + radius * p.sin(angle);
+                        p.vertex(px, py);
+                    }
+                    p.endShape(p.CLOSE);
+                }
+            }
+            
+            function handleMouseInteraction() {
+                if (p.mouseIsPressed && p.mouseX > 0 && p.mouseX < p.width && 
+                    p.mouseY > 0 && p.mouseY < p.height) {
+                    
+                    // Get grid cell
+                    let i = p.floor(p.mouseX / gridSize);
+                    let j = p.floor(p.mouseY / gridSize);
+                    
+                    i = p.constrain(i, 0, cols - 1);
+                    j = p.constrain(j, 0, rows - 1);
+                    
+                    // Create disturbance
+                    let force = p.createVector(
+                        p.mouseX - p.pmouseX,
+                        p.mouseY - p.pmouseY
+                    );
+                    
+                    // Scale force
+                    force.mult(0.1);
+                    
+                    // Apply to velocity field
+                    for (let di = -2; di <= 2; di++) {
+                        for (let dj = -2; dj <= 2; dj++) {
+                            let ni = i + di;
+                            let nj = j + dj;
+                            
+                            if (ni >= 0 && ni < cols && nj >= 0 && nj < rows) {
+                                let dist = p.dist(i, j, ni, nj);
+                                let influence = p.map(dist, 0, 3, 1, 0);
+                                influence = p.constrain(influence, 0, 1);
+                                
+                                velocityField[ni][nj].add(p5.Vector.mult(force, influence));
+                            }
+                        }
+                    }
+                    
+                    // Visual feedback
+                    p.noFill();
+                    p.stroke(255, 150);
+                    p.strokeWeight(2);
+                    p.circle(p.mouseX, p.mouseY, 30);
+                }
+            }
+            
+            function resetSimulation() {
+                viscosity = 0.01;
+                density = 1.0;
+                flowVelocity = 1.0;
+                particleCount = 800;
+                boundarySize = 80;
+                boundaryX = 0.5;
+                boundaryY = 0.5;
+                boundaryType = 'circle';
+                vizMode = 'particles';
+                colorScheme = 'thermal';
+                
+                // Update UI controls
+                document.getElementById('viscosity').value = viscosity;
+                document.getElementById('viscosity-value').textContent = viscosity.toFixed(3);
+                
+                document.getElementById('density').value = density;
+                document.getElementById('density-value').textContent = density.toFixed(1);
+                
+                document.getElementById('velocity').value = flowVelocity;
+                document.getElementById('velocity-value').textContent = flowVelocity.toFixed(1);
+                
+                document.getElementById('particle-count').value = particleCount;
+                document.getElementById('particle-count-value').textContent = particleCount;
+                
+                document.getElementById('boundary-size').value = boundarySize;
+                document.getElementById('boundary-size-value').textContent = boundarySize;
+                
+                document.getElementById('boundary-x').value = boundaryX * 100;
+                document.getElementById('boundary-x-value').textContent = `${Math.round(boundaryX * 100)}%`;
+                
+                document.getElementById('boundary-y').value = boundaryY * 100;
+                document.getElementById('boundary-y-value').textContent = `${Math.round(boundaryY * 100)}%`;
+                
+                document.getElementById('boundary-type').value = boundaryType;
+                document.getElementById('viz-mode').value = vizMode;
+                document.getElementById('color-scheme').value = colorScheme;
+                
+                // Reset simulation
+                resetVelocityField();
+                createParticles();
+            }
+            
+            function randomizeParameters() {
+                viscosity = p.random(0.001, 0.05);
+                density = p.random(0.5, 1.5);
+                flowVelocity = p.random(0.5, 3);
+                particleCount = p.floor(p.random(300, 1500));
+                boundarySize = p.random(30, 120);
+                boundaryX = p.random(0.2, 0.8);
+                boundaryY = p.random(0.2, 0.8);
+                boundaryType = ['none', 'circle', 'square', 'airfoil'][p.floor(p.random(4))];
+                vizMode = ['particles', 'velocity', 'pressure', 'streamlines'][p.floor(p.random(4))];
+                colorScheme = ['thermal', 'ocean', 'plasma', 'rainbow'][p.floor(p.random(4))];
+                
+                // Update UI controls
+                document.getElementById('viscosity').value = viscosity;
+                document.getElementById('viscosity-value').textContent = viscosity.toFixed(3);
+                
+                document.getElementById('density').value = density;
+                document.getElementById('density-value').textContent = density.toFixed(1);
+                
+                document.getElementById('velocity').value = flowVelocity;
+                document.getElementById('velocity-value').textContent = flowVelocity.toFixed(1);
+                
+                document.getElementById('particle-count').value = particleCount;
+                document.getElementById('particle-count-value').textContent = particleCount;
+                
+                document.getElementById('boundary-size').value = boundarySize;
+                document.getElementById('boundary-size-value').textContent = boundarySize;
+                
+                document.getElementById('boundary-x').value = boundaryX * 100;
+                document.getElementById('boundary-x-value').textContent = `${Math.round(boundaryX * 100)}%`;
+                
+                document.getElementById('boundary-y').value = boundaryY * 100;
+                document.getElementById('boundary-y-value').textContent = `${Math.round(boundaryY * 100)}%`;
+                
+                document.getElementById('boundary-type').value = boundaryType;
+                document.getElementById('viz-mode').value = vizMode;
+                document.getElementById('color-scheme').value = colorScheme;
+                
+                // Reset simulation
+                resetVelocityField();
+                createParticles();
+            }
+            
+            p.windowResized = () => {
+                canvasWidth = Math.min(p.windowWidth - 40, 1200);
+                canvasHeight = Math.min(p.windowHeight - 40, 800);
+                p.resizeCanvas(canvasWidth, canvasHeight);
+                
+                // Reinitialize grid
+                cols = Math.floor(canvasWidth / gridSize);
+                rows = Math.floor(canvasHeight / gridSize);
+                resetVelocityField();
+            };
+        };
+
+        new p5(fluidSim);
+    </script>
+
+              
+          
+                
+          
+              
